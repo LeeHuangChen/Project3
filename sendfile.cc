@@ -14,16 +14,27 @@
 #include <iterator>
 #include <iostream>
 #include <thread>         // std::thread
+#include <memory>
 
 /*syntax:  sendfile -r 127.0.0.1:18000 -f testfile.txt*/
 
 ////////////////////////																							//////////////////
 //  GLOBAL VARIABLES  //																							//////////////////
 ////////////////////////																							//////////////////
-
+struct packet{
+	char* buffer;
+	unsigned int size;
+};
+typedef struct packet PACKET;
+enum ePacketType{
+	ACK,
+	DATA,
+	FILENAME,
+	FILE_END
+};
 //Send and Receive
-std::map<unsigned int, char*> dataMap;
-std::map<unsigned int, char*> ackMap;
+std::map<unsigned int, std::shared_ptr<PACKET>> dataMap;
+std::map<unsigned int, std::shared_ptr<PACKET>> ackMap;
 
 //File i/o
 char* filename;
@@ -97,6 +108,9 @@ unsigned int filesize;
 //Helper functions for this section:
 int getPacketSize();
 int readNextPacket(char *buffer);
+void addInfoToMap(char *buffer, unsigned int size, unsigned int seqNum, std::map<unsigned int, std::shared_ptr<PACKET>> map);
+void addPacketToMap(std::shared_ptr<PACKET> packet, unsigned int seqNum, std::map<unsigned int, std::shared_ptr<PACKET>> map);
+void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
 
 //Code for this section:
 void threadSend(){
@@ -111,13 +125,15 @@ void threadSend(){
 	filesize = ftell(inputFile);
 	rewind(inputFile);
 
-
+	unsigned int seqNum=1;
 	int readSize=0;
 	while(!finishedReading){
 		//make a buffer of .05 MB to send
 		char *sendBuffer = (char*) malloc(50000); 
 		// Read the Next packet and put it in sendbuffer
 		readSize=readNextPacket(sendBuffer);
+		addInfoToMap(sendBuffer, readSize, seqNum, dataMap);
+		seqNum++;
 		//Send the contents of send buffer to the reciever
 		sendMessage(sendBuffer,readSize);
 		//print the contents for testing
@@ -125,6 +141,7 @@ void threadSend(){
 		//free the memory
 		free(sendBuffer);
 	}
+	
 }
 
 //Helper functions
@@ -147,6 +164,37 @@ int getPacketSize(){
 	}
 	return readSize;
 }
+void addInfoToMap(char *buffer, unsigned int size, unsigned int seqNum,std::map<unsigned int, std::shared_ptr<PACKET>> map){
+	std::shared_ptr<PACKET> packet (new PACKET());
+	packet->buffer = buffer;
+	packet->size = size;
+	addPacketToMap(packet,seqNum,map);
+}
+void addPacketToMap(std::shared_ptr<PACKET> packet, unsigned int seqNum, std::map<unsigned int, std::shared_ptr<PACKET>> map){
+	map.insert(std::make_pair(seqNum, packet));
+	printf("seqNum:%d\n",seqNum);
+	printf("inserted, size:%d\n",map[seqNum]->size);
+	//printf("  message:%s\n", map[seqNum]->buffer);
+	displayMap(dataMap,"DataMapContents");
+}
+
+void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name){
+	typedef std::map<unsigned int, std::shared_ptr<PACKET>>::iterator it_type;
+	printf("\n");
+	printf("MapName:%s\n", name);
+	for(it_type iterator = map.begin(); iterator != map.end(); iterator++) {
+	    // iterator->first = key
+	    // iterator->second = value
+		unsigned int SeqNum=iterator->first;
+		char *buffer = iterator->second->buffer;
+		unsigned int size = iterator->second->size;
+		printf("  Entry(SeqNum):%d\n", SeqNum);
+		printf("  Size:%d\n", size);
+		printf("  Buffer:%s\n", buffer);
+		
+	}
+}
+
 void threadRecv(){
 	printf("threadRecv executed.\n");
 }

@@ -19,7 +19,7 @@ struct packet{
  typedef struct packet PACKET;
 
 //FUNCTION DECLARATIONS
-//void displayMap(std::map<unsigned int, PACKET> map, const char* name);
+void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
 
 
 
@@ -36,8 +36,26 @@ int main(){
 	printf("%s\n", mapOfMessages[1]->buffer); 
 	printf("size:%d\n", mapOfMessages[1]->size);
 	
+	displayMap(mapOfMessages,"mapOfMessages");
+
 	mapOfMessages.erase(1);
 
 	return 0;
 }
 
+void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name){
+	typedef std::map<unsigned int, std::shared_ptr<PACKET>>::iterator it_type;
+	printf("\n");
+	printf("MapName:%s\n", name);
+	for(it_type iterator = map.begin(); iterator != map.end(); iterator++) {
+	    // iterator->first = key
+	    // iterator->second = value
+		unsigned int SeqNum=iterator->first;
+		char *buffer = iterator->second->buffer;
+		unsigned int size = iterator->second->size;
+		printf("  Entry(SeqNum):%d\n", SeqNum);
+		printf("  Size:%d\n", size);
+		printf("  Buffer:%s\n", buffer);
+		
+	}
+}
