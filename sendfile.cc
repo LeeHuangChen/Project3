@@ -113,6 +113,7 @@ int readNextPacket(char *buffer);
 void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size);
 void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size);
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
+void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, char *result);
 
 //Code for this section:
 void threadSend(){
@@ -135,16 +136,34 @@ void threadSend(){
 		// Read the Next packet and put it in sendbuffer
 		readSize=readNextPacket(sendBuffer);
 		//addInfoToMap(sendBuffer, readSize, seqNum, dataMap);
-		addInfoToDataMap(seqNum,sendBuffer,readSize);
+		char *formattedBuffer=(char*)malloc(readSize+7);
+		ePacketType type=DATA;
+		memcpy(&formattedBuffer[0],&type,1);
+		memcpy(&formattedBuffer[1],"type",4);
+		//ePacketType readType=(ePacketType) formattedBuffer[0];
+		//printf("readType==DATA:%d\n",readType==DATA);
+		printf("test2\n");
+		for(int i =0;i<readSize;i++){
+			memcpy(&formattedBuffer[i+7],&sendBuffer[i],1);
+			printf("test:%s\n",formattedBuffer[i+7]);
+		}
+		
+		//char *buffer= (char*) malloc(readSize);
+		//memcpy(&buffer,&formattedBuffer[7],readSize);
+		printf("buffer:%.20s\n",formattedBuffer[7]);
+		addInfoToDataMap(seqNum,formattedBuffer,readSize+7);
+		//addInfoToDataMap(seqNum,sendBuffer,readSize);
 		//printf("SeqNum:%d, size:%d\n", seqNum, dataMap[seqNum]->size);
-		//displayMap(dataMap,"DataMapContents");
-		seqNum++;
+		displayMap(dataMap,"DataMapContents");
+		
 		
 		
 		//Send the contents of send buffer to the reciever
-		sendMessage(sendBuffer,readSize);
+		sendMessage(dataMap[seqNum]->buffer,dataMap[seqNum]->size);
+		//sendMessage(sendBuffer,readSize);
+		seqNum++;
 		//print the contents for testing
-		printf("sendBuffer[0]:%c\n",(char)sendBuffer[0]);
+		//printf("sendBuffer[0]:%c\n",(char)sendBuffer[0]);
 
 		
 		//free the memory
@@ -186,6 +205,14 @@ void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size){
 	packet->size = size;
 	ackMap.insert(std::make_pair(seqNum, packet));
 }
+void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, char *result){
+	// char *result= (char*)malloc(sizeof(&payload)+7);
+	memcpy(&result[0],&type,1);
+	memcpy(&result[1],&seqNum,4);
+	memcpy(&result[7],&payload,sizeof(&payload));
+	//printf("payload:%s\n", payload);
+	
+}
 
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name){
 	typedef std::map<unsigned int, std::shared_ptr<PACKET>>::iterator it_type;
@@ -199,31 +226,17 @@ void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char*
 		unsigned int size = iterator->second->size;
 		printf("  Entry(SeqNum):%d\n", SeqNum);
 		printf("  Size:%d\n", size);
-		printf("  Buffer:%c%c%c%c%c%c%c%c%c%c...\n", 
+		printf("  Buffer:%.20s\n", buffer);
+		/*printf("  Buffer:%c%c%c%c%c%c%c%c%c%c...\n", 
 				buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]
-				, buffer[5], buffer[6], buffer[7], buffer[8], buffer[9]);
+				, buffer[5], buffer[6], buffer[7], buffer[8], buffer[9]);*/
 		//printf("  Buffer:%s\n", buffer);
 
 		
 		
 	}
 }
-// void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name, unsigned int start, unsigned int end){
-// 	typedef std::map<unsigned int, std::shared_ptr<PACKET>>::iterator it_type;
-// 	printf("\n");
-// 	printf("MapName:%s\n", name);
-// 	for(unsigned int i=start;i<=end;i++){
-// 		if(map.find(i) != map.end()){
-// 			unsigned int SeqNum=i;
-// 			char *buffer = map[i]->buffer;
-// 			unsigned int size = map[i]->size;
-// 			printf("  Entry(SeqNum):%d\n", SeqNum);
-// 			printf("  Size:%d\n", size);
-// 			printf("  Buffer:%s\n", buffer);
-// 		}
-// 		printf("%d test:%d\n", i,(map.find(i) != map.end()));
-// 	}
-// }
+
 
 void threadRecv(){
 	int seqNum=1;
@@ -232,8 +245,11 @@ void threadRecv(){
 		char *recvBuffer = (char*) malloc(50000);
 		recvMessage(recvBuffer,3000);
 		addInfoToAckMap(seqNum,recvBuffer,sizeof(&recvBuffer));
+		//displayMap(ackMap,"AckMap");
+		if(seqNum==3){
+			finishedReceiving=true;
+		}
 		seqNum++;
-		displayMap(ackMap,"AckMap");
 	}
 }
  
