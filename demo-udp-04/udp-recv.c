@@ -59,7 +59,7 @@ main(int argc, char **argv)
 		}
 		else
 			printf("uh oh - something went wrong!\n");
-		sprintf(buf, "ack %d", msgcnt++);
+		sprintf(buf, "ack message %d", msgcnt++);
 		printf("sending response \"%s\"\n", buf);
 		if (sendto(fd, buf, strlen(buf), 0, (struct sockaddr *)&remaddr, addrlen) < 0)
 			perror("sendto");

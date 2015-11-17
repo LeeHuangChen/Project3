@@ -16,7 +16,7 @@
 #include <thread>         // std::thread
 #include <memory>
 
-/*syntax:  sendfile -r 127.0.0.1:18000 -f testfile.txt*/
+/*syntax:  ./sendfile -r 127.0.0.1:18000 -f testfile2.txt*/
 
 ////////////////////////																							//////////////////
 //  GLOBAL VARIABLES  //																							//////////////////
@@ -67,6 +67,7 @@ int setupServerAddress();
 //File i/o
 void sendMessage(char *my_message, unsigned int messageLength);
 void readfile(char *sendBuffer, unsigned int readSize);
+void recvMessage(char *my_message, unsigned int messageLength);
 
 //Helper
 void printInputContents();
@@ -101,6 +102,7 @@ int packetSize = 50000;
 int readingPositionInTheInputFile=0;
 int bytesLeftToRead;
 bool finishedReading=false;
+bool finishedReceiving=false;
 unsigned int filesize;
 
 
@@ -109,6 +111,7 @@ unsigned int filesize;
 int getPacketSize();
 int readNextPacket(char *buffer);
 void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size);
+void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size);
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
 
 //Code for this section:
@@ -134,7 +137,7 @@ void threadSend(){
 		//addInfoToMap(sendBuffer, readSize, seqNum, dataMap);
 		addInfoToDataMap(seqNum,sendBuffer,readSize);
 		//printf("SeqNum:%d, size:%d\n", seqNum, dataMap[seqNum]->size);
-		displayMap(dataMap,"DataMapContents");
+		//displayMap(dataMap,"DataMapContents");
 		seqNum++;
 		
 		
@@ -142,6 +145,8 @@ void threadSend(){
 		sendMessage(sendBuffer,readSize);
 		//print the contents for testing
 		printf("sendBuffer[0]:%c\n",(char)sendBuffer[0]);
+
+		
 		//free the memory
 		//free(sendBuffer);
 	}
@@ -173,6 +178,13 @@ void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size){
 	packet->buffer = buffer;
 	packet->size = size;
 	dataMap.insert(std::make_pair(seqNum, packet));
+}
+
+void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size){
+	std::shared_ptr<PACKET> packet (new PACKET());
+	packet->buffer = buffer;
+	packet->size = size;
+	ackMap.insert(std::make_pair(seqNum, packet));
 }
 
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name){
@@ -214,7 +226,15 @@ void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char*
 // }
 
 void threadRecv(){
-	printf("threadRecv executed.\n");
+	int seqNum=1;
+	while(!finishedReceiving){
+		printf("### Receiving Message\n");
+		char *recvBuffer = (char*) malloc(50000);
+		recvMessage(recvBuffer,3000);
+		addInfoToAckMap(seqNum,recvBuffer,sizeof(&recvBuffer));
+		seqNum++;
+		displayMap(ackMap,"AckMap");
+	}
 }
  
 ///////////////////////////////////////////////////////																//////////////////
@@ -313,6 +333,21 @@ void sendMessage(char *my_message, unsigned int messageLength){
 		printf("sendto failed\n");
 		exit(1);
 	}
+}
+
+void recvMessage(char *my_message, unsigned int messageLength){
+	printf("receiving message from %s\n", ip);
+	int slen = sizeof(servaddr);
+	int recvlen = recvfrom(sock, my_message, messageLength, 0, (struct sockaddr *)&servaddr, &slen);
+	if (recvlen< 0) { 
+		perror("recvfrom failed"); 
+		printf("recvfrom failed\n");
+		exit(1);
+	}
+	if (recvlen >= 0) {
+        my_message[recvlen] = 0;	/* expect a printable string - terminate it */
+        printf("received message: \"%s\"\n", my_message);
+    }
 }
 
 ////////////////////////																							//////////////////
