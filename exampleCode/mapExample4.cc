@@ -20,23 +20,29 @@ struct packet{
 
 //FUNCTION DECLARATIONS
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
-
+std::map<unsigned int, std::shared_ptr<PACKET>> mapOfMessages;
 
 
 //MAIN CODE
 int main(){
-	std::shared_ptr<PACKET> packet (new PACKET());
-
-	packet->buffer = (char*) "First Message";
-	packet->size = sizeof(packet->buffer);
-
-	std::map<unsigned int, std::shared_ptr<PACKET>> mapOfMessages;
-	mapOfMessages.insert(std::make_pair(1, packet));
-	printf("added the following message to the map:\n");
-	printf("%s\n", mapOfMessages[1]->buffer); 
-	printf("size:%d\n", mapOfMessages[1]->size);
 	
-	displayMap(mapOfMessages,"mapOfMessages");
+	
+	for(unsigned int testint=1; testint<3;testint++ ){
+		std::shared_ptr<PACKET> packet (new PACKET());
+
+		packet->buffer = (char*) "First Message";
+		packet->size = sizeof(packet->buffer);
+
+		
+		
+		mapOfMessages.insert(std::make_pair(testint, packet));
+		printf("added the following message to the map:\n");
+		printf("%s\n", mapOfMessages[testint]->buffer); 
+		printf("size:%d\n", mapOfMessages[testint]->size);
+		
+		displayMap(mapOfMessages,"mapOfMessages");
+	}
+	
 
 	mapOfMessages.erase(1);
 

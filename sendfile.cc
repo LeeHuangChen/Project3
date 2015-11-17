@@ -108,8 +108,7 @@ unsigned int filesize;
 //Helper functions for this section:
 int getPacketSize();
 int readNextPacket(char *buffer);
-void addInfoToMap(char *buffer, unsigned int size, unsigned int seqNum, std::map<unsigned int, std::shared_ptr<PACKET>> map);
-void addPacketToMap(std::shared_ptr<PACKET> packet, unsigned int seqNum, std::map<unsigned int, std::shared_ptr<PACKET>> map);
+void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size);
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
 
 //Code for this section:
@@ -132,14 +131,19 @@ void threadSend(){
 		char *sendBuffer = (char*) malloc(50000); 
 		// Read the Next packet and put it in sendbuffer
 		readSize=readNextPacket(sendBuffer);
-		addInfoToMap(sendBuffer, readSize, seqNum, dataMap);
+		//addInfoToMap(sendBuffer, readSize, seqNum, dataMap);
+		addInfoToDataMap(seqNum,sendBuffer,readSize);
+		//printf("SeqNum:%d, size:%d\n", seqNum, dataMap[seqNum]->size);
+		displayMap(dataMap,"DataMapContents");
 		seqNum++;
+		
+		
 		//Send the contents of send buffer to the reciever
 		sendMessage(sendBuffer,readSize);
 		//print the contents for testing
 		printf("sendBuffer[0]:%c\n",(char)sendBuffer[0]);
 		//free the memory
-		free(sendBuffer);
+		//free(sendBuffer);
 	}
 	
 }
@@ -164,18 +168,11 @@ int getPacketSize(){
 	}
 	return readSize;
 }
-void addInfoToMap(char *buffer, unsigned int size, unsigned int seqNum,std::map<unsigned int, std::shared_ptr<PACKET>> map){
+void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size){
 	std::shared_ptr<PACKET> packet (new PACKET());
 	packet->buffer = buffer;
 	packet->size = size;
-	addPacketToMap(packet,seqNum,map);
-}
-void addPacketToMap(std::shared_ptr<PACKET> packet, unsigned int seqNum, std::map<unsigned int, std::shared_ptr<PACKET>> map){
-	map.insert(std::make_pair(seqNum, packet));
-	printf("seqNum:%d\n",seqNum);
-	printf("inserted, size:%d\n",map[seqNum]->size);
-	//printf("  message:%s\n", map[seqNum]->buffer);
-	displayMap(dataMap,"DataMapContents");
+	dataMap.insert(std::make_pair(seqNum, packet));
 }
 
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name){
@@ -190,10 +187,31 @@ void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char*
 		unsigned int size = iterator->second->size;
 		printf("  Entry(SeqNum):%d\n", SeqNum);
 		printf("  Size:%d\n", size);
-		printf("  Buffer:%s\n", buffer);
+		printf("  Buffer:%c%c%c%c%c%c%c%c%c%c...\n", 
+				buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]
+				, buffer[5], buffer[6], buffer[7], buffer[8], buffer[9]);
+		//printf("  Buffer:%s\n", buffer);
+
+		
 		
 	}
 }
+// void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name, unsigned int start, unsigned int end){
+// 	typedef std::map<unsigned int, std::shared_ptr<PACKET>>::iterator it_type;
+// 	printf("\n");
+// 	printf("MapName:%s\n", name);
+// 	for(unsigned int i=start;i<=end;i++){
+// 		if(map.find(i) != map.end()){
+// 			unsigned int SeqNum=i;
+// 			char *buffer = map[i]->buffer;
+// 			unsigned int size = map[i]->size;
+// 			printf("  Entry(SeqNum):%d\n", SeqNum);
+// 			printf("  Size:%d\n", size);
+// 			printf("  Buffer:%s\n", buffer);
+// 		}
+// 		printf("%d test:%d\n", i,(map.find(i) != map.end()));
+// 	}
+// }
 
 void threadRecv(){
 	printf("threadRecv executed.\n");
