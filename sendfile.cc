@@ -65,7 +65,7 @@ int setupSocket();
 int setupServerAddress();
 
 //File i/o
-void sendMessage(char *my_message, unsigned int messageLength);
+void sendMessage(const char *my_message, unsigned int messageLength);
 void readfile(char *sendBuffer, unsigned int readSize);
 void recvMessage(char *my_message, unsigned int messageLength);
 
@@ -98,7 +98,8 @@ int main(int argc, char** argv){
 //ZSEND
 
 //Global Variables for this section:
-int packetSize = 50000;
+int packetSize = 49990;
+//int packetSize = 500;
 int readingPositionInTheInputFile=0;
 int bytesLeftToRead;
 bool finishedReading=false;
@@ -136,30 +137,23 @@ void threadSend(){
 		// Read the Next packet and put it in sendbuffer
 		readSize=readNextPacket(sendBuffer);
 		//addInfoToMap(sendBuffer, readSize, seqNum, dataMap);
-		char *formattedBuffer=(char*)malloc(readSize+7);
+		char *formattedBuffer=new char[readSize+7];
+		memset(formattedBuffer,0,sizeof(char)*(readSize+7));
 		ePacketType type=DATA;
 		memcpy(&formattedBuffer[0],&type,1);
-		memcpy(&formattedBuffer[1],"type",4);
-		//ePacketType readType=(ePacketType) formattedBuffer[0];
-		//printf("readType==DATA:%d\n",readType==DATA);
-		printf("test2\n");
-		for(int i =0;i<readSize;i++){
-			memcpy(&formattedBuffer[i+7],&sendBuffer[i],1);
-			printf("test:%s\n",formattedBuffer[i+7]);
-		}
-		
-		//char *buffer= (char*) malloc(readSize);
-		//memcpy(&buffer,&formattedBuffer[7],readSize);
-		printf("buffer:%.20s\n",formattedBuffer[7]);
+		memcpy(&formattedBuffer[1],&seqNum,4);
+
+		unsigned short checksum=0;
+		memcpy(formattedBuffer+5,&checksum,2);
+		printf("&&test3\n");
+		memcpy(formattedBuffer+7,(const char*)sendBuffer,readSize);
 		addInfoToDataMap(seqNum,formattedBuffer,readSize+7);
 		//addInfoToDataMap(seqNum,sendBuffer,readSize);
 		//printf("SeqNum:%d, size:%d\n", seqNum, dataMap[seqNum]->size);
 		displayMap(dataMap,"DataMapContents");
-		
-		
-		
 		//Send the contents of send buffer to the reciever
-		sendMessage(dataMap[seqNum]->buffer,dataMap[seqNum]->size);
+		sendMessage((const char*) dataMap[seqNum]->buffer,dataMap[seqNum]->size);
+		//sendMessage(formattedBuffer,readSize+7);
 		//sendMessage(sendBuffer,readSize);
 		seqNum++;
 		//print the contents for testing
@@ -226,7 +220,9 @@ void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char*
 		unsigned int size = iterator->second->size;
 		printf("  Entry(SeqNum):%d\n", SeqNum);
 		printf("  Size:%d\n", size);
-		printf("  Buffer:%.20s\n", buffer);
+		printf("  SeqNumFromPayload:%d\n",(unsigned int)(buffer[1]));
+		printf("  CheckSumFromPayload:%d\n", (unsigned int)(buffer[5]));
+		printf("  BufferFromPayload:%.20s\n", buffer+7);
 		/*printf("  Buffer:%c%c%c%c%c%c%c%c%c%c...\n", 
 				buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]
 				, buffer[5], buffer[6], buffer[7], buffer[8], buffer[9]);*/
@@ -342,9 +338,9 @@ void readfile(char *sendBuffer, unsigned int readSize){
 	}
 }
 
-void sendMessage(char *my_message, unsigned int messageLength){
+void sendMessage(const char *my_message, unsigned int messageLength){
 	printf("sending message to %s\n", ip);
-	if (sendto(sock, my_message, strlen(my_message), 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) { 
+	if (sendto(sock, my_message, messageLength/*strlen(my_message)*/, 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) { 
 		perror("sendto failed"); 
 		printf("sendto failed\n");
 		exit(1);
