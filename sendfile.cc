@@ -105,6 +105,10 @@ int bytesLeftToRead;
 bool finishedReading=false;
 bool finishedReceiving=false;
 unsigned int filesize;
+//window management
+unsigned int windowStart=0;
+unsigned int windowSize = 10;
+unsigned int totalNumPackets;
 
 
 
@@ -114,7 +118,10 @@ int readNextPacket(char *buffer);
 void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size);
 void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size);
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
-void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, char *result);
+void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, int payloadSize, char *result);
+unsigned short checksum(char *buf, unsigned short size);
+bool isDropPkt(char *buf, unsigned short size);
+void addNextPacketToDataMap(unsigned int index);
 
 //Code for this section:
 void threadSend(){
@@ -128,45 +135,125 @@ void threadSend(){
 	fseek(inputFile,0,SEEK_END);
 	filesize = ftell(inputFile);
 	rewind(inputFile);
-
+	//+2 for the filename and file_end packet
+	totalNumPackets=(filesize+(packetSize-1))/packetSize+2;
+	printf("&&& totalNumPackets:%d\n",totalNumPackets);
+	
+	//local variables for this function
 	unsigned int seqNum=1;
 	int readSize=0;
-	while(!finishedReading){
+	unsigned int nextPacketToSend=0;
+	unsigned int nextPacketToRead=0;
+
+	
+
+	//read in the data inside the initial window and put it into dataMap
+	for(nextPacketToRead=0;((nextPacketToRead<windowSize) && (nextPacketToRead<totalNumPackets));nextPacketToRead++){
+		addNextPacketToDataMap(nextPacketToRead);
+		//displayMap(dataMap,"dataMap");
+		printf("nextPacketToRead:%d\n",nextPacketToRead );
+	}
+	//printf("### Finished first For\n");
+	while(windowStart<totalNumPackets){
+		//printf("  ## In first while\n");
+		while(ackMap.find(windowStart)== ackMap.end()){
+			//printf("  ## In second while\n");
+			//sendPackets inside the window
+			if(nextPacketToSend<(windowStart+windowSize)){
+				if(ackMap.find(nextPacketToSend)== ackMap.end()){
+					//send(encode(dataMap[nextPacketToSend]));
+					sendMessage((const char*) dataMap[nextPacketToSend]->buffer,dataMap[nextPacketToSend]->size);
+				}
+				nextPacketToSend++;
+			}
+			else{
+				nextPacketToSend=windowStart;
+				if(ackMap.find(nextPacketToSend)== ackMap.end()){
+					//send(encode(dataMap[nextPacketToSend]));
+					sendMessage((const char*) dataMap[nextPacketToSend]->buffer,dataMap[nextPacketToSend]->size);
+				}
+				nextPacketToSend++;
+				//wait for a bit;
+				for(int j=0;j<100000;j++){}
+			}
+		}
+		ackMap.erase(windowStart);
+		dataMap.erase(windowStart);
+		if(nextPacketToRead<totalNumPackets){
+			addNextPacketToDataMap(nextPacketToRead);
+		}
+		
+		printf("windowStart:%d\n", windowStart);
+		printf("nextPacketToRead:%d\n",nextPacketToRead);
+		windowStart++;
+		nextPacketToRead++;
+	}
+	/*while(!finishedReading){
 		//make a buffer of .05 MB to send
 		char *sendBuffer = (char*) malloc(50000); 
 		// Read the Next packet and put it in sendbuffer
 		readSize=readNextPacket(sendBuffer);
 		//addInfoToMap(sendBuffer, readSize, seqNum, dataMap);
-		char *formattedBuffer=new char[readSize+7];
-		memset(formattedBuffer,0,sizeof(char)*(readSize+7));
-		ePacketType type=DATA;
-		memcpy(&formattedBuffer[0],&type,1);
-		memcpy(&formattedBuffer[1],&seqNum,4);
+		char *formattedBuffer=new char[readSize+8];
+		
 
-		unsigned short checksum=0;
-		memcpy(formattedBuffer+5,&checksum,2);
-		printf("&&test3\n");
-		memcpy(formattedBuffer+7,(const char*)sendBuffer,readSize);
-		addInfoToDataMap(seqNum,formattedBuffer,readSize+7);
-		//addInfoToDataMap(seqNum,sendBuffer,readSize);
-		//printf("SeqNum:%d, size:%d\n", seqNum, dataMap[seqNum]->size);
+		makeBuffer(DATA,seqNum,sendBuffer,readSize,formattedBuffer);
+
+		addInfoToDataMap(seqNum,formattedBuffer,readSize+8);
 		displayMap(dataMap,"DataMapContents");
 		//Send the contents of send buffer to the reciever
 		sendMessage((const char*) dataMap[seqNum]->buffer,dataMap[seqNum]->size);
-		//sendMessage(formattedBuffer,readSize+7);
-		//sendMessage(sendBuffer,readSize);
 		seqNum++;
-		//print the contents for testing
-		//printf("sendBuffer[0]:%c\n",(char)sendBuffer[0]);
 
-		
 		//free the memory
-		//free(sendBuffer);
+		free(sendBuffer);
 	}
+	char *endBuffer= new char[8];
+	makeBuffer(FILE_END,seqNum,new char[0],0,endBuffer);
+	addInfoToDataMap(seqNum,endBuffer,8);
+	free(endBuffer);*/
+
+
+	
+	
 	
 }
 
 //Helper functions
+void addNextPacketToDataMap(unsigned int index){
+	printf("addNextPacket_Index:%d\n", index);
+	if(index==0){
+		//add the filenameBuffer to the map
+		printf("* add Title\n");
+		char *filenameBuffer = new char[strlen(filename)+8];
+		printf("filenameBufferLen:%d\n",strlen(filename)+8);
+		printf("filename:%s\n", filename);
+		makeBuffer(FILENAME,index,filename,strlen(filename),filenameBuffer);
+		addInfoToDataMap(index,filenameBuffer,strlen(filename)+8);
+		//free(filenameBuffer);
+		//displayMap(dataMap,"DataMapContents");
+	}
+	else if(index==totalNumPackets-1){
+		printf("* add file end\n");
+		char *endBuffer= new char[8];
+		makeBuffer(FILE_END,index,new char[0],0,endBuffer);
+		addInfoToDataMap(index,endBuffer,8);
+		//free(endBuffer);
+	}
+	else if(index>=totalNumPackets){
+
+	}
+	else{
+		printf("* add Data\n");
+		char *sendBuffer = (char*) malloc(50000); 
+		// Read the Next packet and put it in sendbuffer
+		int readSize=readNextPacket(sendBuffer);
+		char *formattedBuffer=new char[readSize+8];
+		makeBuffer(DATA,index,sendBuffer,readSize,formattedBuffer);
+		addInfoToDataMap(index,formattedBuffer,readSize+8);
+		free(sendBuffer);
+	}
+}
 int readNextPacket(char *buffer){
 	int readSize=getPacketSize();
 	//Read the input file for 'readSize' amount of data and store it in buffer
@@ -199,13 +286,48 @@ void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size){
 	packet->size = size;
 	ackMap.insert(std::make_pair(seqNum, packet));
 }
-void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, char *result){
-	// char *result= (char*)malloc(sizeof(&payload)+7);
-	memcpy(&result[0],&type,1);
-	memcpy(&result[1],&seqNum,4);
-	memcpy(&result[7],&payload,sizeof(&payload));
-	//printf("payload:%s\n", payload);
+void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, int payloadSize, char *result){
+	memset(result,0,sizeof(char)*(payloadSize+8));
+	//ePacketType type=DATA;
+	memcpy(&result[0],&type,2);
+	memcpy(&result[2],&seqNum,4);
+	printf("() makeBuffer_Payload:%.20s\n",payload);
+	printf("() makeBuffer_seqNum:%d\n",seqNum);
+	memcpy(result+8,(const char*)payload,payloadSize);
+
+	unsigned short checksumValue=checksum(result,payloadSize+8);
+	memcpy(result+6,&checksumValue,2);
 	
+}
+unsigned short checksum(char *buf, unsigned short size)
+{
+    register long sum=0;
+
+    for(int i=0; i<size; i+=sizeof(unsigned short))
+    {
+        if(i==size-1)
+            break;
+        sum += *(unsigned short *)buf;
+        buf += sizeof(unsigned short);
+
+        if (sum & 0xFFFF0000)
+        {
+            sum &= 0xFFFF;
+            sum++;
+        }
+    }
+    return ~(sum & 0xFFFF);
+}
+
+bool isDropPkt(char *buf, unsigned short size)
+{
+    unsigned short pkt_checksum = *(unsigned short *)(buf + sizeof(char)* 6);
+    //unsigned short pkt_checksum = ntohs(*(unsigned short *)(buf + sizeof(char)* 5));
+    *(unsigned short *)(buf + sizeof(char)* 6)=0;
+    if (pkt_checksum != checksum(buf, size))
+          return 1;
+    else
+          return 0;
 }
 
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name){
@@ -220,13 +342,11 @@ void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char*
 		unsigned int size = iterator->second->size;
 		printf("  Entry(SeqNum):%d\n", SeqNum);
 		printf("  Size:%d\n", size);
-		printf("  SeqNumFromPayload:%d\n",(unsigned int)(buffer[1]));
-		printf("  CheckSumFromPayload:%d\n", (unsigned int)(buffer[5]));
-		printf("  BufferFromPayload:%.20s\n", buffer+7);
-		/*printf("  Buffer:%c%c%c%c%c%c%c%c%c%c...\n", 
-				buffer[0], buffer[1], buffer[2], buffer[3], buffer[4]
-				, buffer[5], buffer[6], buffer[7], buffer[8], buffer[9]);*/
-		//printf("  Buffer:%s\n", buffer);
+		printf("  SeqNumFromPayload:%d\n",(unsigned int)(buffer[2]));
+		printf("  CheckSumFromPayload:%d\n", (unsigned short)(buffer[6]));
+		printf("  BufferFromPayload:%.30s\n\n", buffer+8);
+		//printf("  isDropPkt:%d\n",(isDropPkt(buffer,size)));
+		
 
 		
 		
@@ -235,17 +355,15 @@ void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char*
 
 
 void threadRecv(){
-	int seqNum=1;
-	while(!finishedReceiving){
+	int seqNum=0;
+	while(windowStart<totalNumPackets){
 		printf("### Receiving Message\n");
 		char *recvBuffer = (char*) malloc(50000);
 		recvMessage(recvBuffer,3000);
 		addInfoToAckMap(seqNum,recvBuffer,sizeof(&recvBuffer));
-		//displayMap(ackMap,"AckMap");
-		if(seqNum==3){
-			finishedReceiving=true;
-		}
+		displayMap(ackMap,"AckMap");
 		seqNum++;
+
 	}
 }
  
@@ -339,7 +457,7 @@ void readfile(char *sendBuffer, unsigned int readSize){
 }
 
 void sendMessage(const char *my_message, unsigned int messageLength){
-	printf("sending message to %s\n", ip);
+	//printf("sending message to %s\n", ip);
 	if (sendto(sock, my_message, messageLength/*strlen(my_message)*/, 0, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) { 
 		perror("sendto failed"); 
 		printf("sendto failed\n");
