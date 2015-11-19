@@ -39,6 +39,9 @@ std::map<unsigned int, std::shared_ptr<PACKET>> ackMap;
 //File i/o
 char* filename;
 FILE *inputFile; /* File to send*/
+int packetSize = 2048;
+unsigned int filesize;
+unsigned int totalNumPackets;
 
 //Network Variables
 char* ip;
@@ -79,8 +82,22 @@ void printInputContents();
 int main(int argc, char** argv){
 	//initialize the network connection
 	initConnection(argc, argv);
-	//send the file to the receiver
-	//threadSend();
+	
+	//open the input file
+	inputFile = fopen(filename,"r");
+	if(inputFile==NULL){
+		fputs ("File error",stderr);exit(1);
+	}
+
+	//obtain file size:
+	fseek(inputFile,0,SEEK_END);
+	filesize = ftell(inputFile);
+	rewind(inputFile);
+	//+2 for the filename and file_end packet
+	totalNumPackets=(filesize+(packetSize-1))/packetSize+2;
+	printf("&&& totalNumPackets:%d\n",totalNumPackets);
+	
+
 	std::thread first (threadSend);
 	std::thread second (threadRecv);
 	first.join();
@@ -98,17 +115,18 @@ int main(int argc, char** argv){
 //ZSEND
 
 //Global Variables for this section:
-int packetSize = 49990;
+
 //int packetSize = 500;
 int readingPositionInTheInputFile=0;
 int bytesLeftToRead;
 bool finishedReading=false;
 bool finishedReceiving=false;
-unsigned int filesize;
+
 //window management
 unsigned int windowStart=0;
-unsigned int windowSize = 10;
-unsigned int totalNumPackets;
+unsigned int windowSize = 5;
+
+
 
 
 
@@ -154,69 +172,40 @@ void threadSend(){
 		printf("nextPacketToRead:%d\n",nextPacketToRead );
 	}
 	//printf("### Finished first For\n");
+
 	while(windowStart<totalNumPackets){
-		//printf("  ## In first while\n");
-		while(ackMap.find(windowStart)== ackMap.end()){
-			//printf("  ## In second while\n");
-			//sendPackets inside the window
-			if(nextPacketToSend<(windowStart+windowSize)){
-				if(ackMap.find(nextPacketToSend)== ackMap.end()){
-					//send(encode(dataMap[nextPacketToSend]));
-					sendMessage((const char*) dataMap[nextPacketToSend]->buffer,dataMap[nextPacketToSend]->size);
-				}
-				nextPacketToSend++;
-			}
-			else{
-				nextPacketToSend=windowStart;
-				if(ackMap.find(nextPacketToSend)== ackMap.end()){
-					//send(encode(dataMap[nextPacketToSend]));
-					sendMessage((const char*) dataMap[nextPacketToSend]->buffer,dataMap[nextPacketToSend]->size);
-				}
-				nextPacketToSend++;
-				//wait for a bit;
-				for(int j=0;j<100000;j++){}
+		for(int i=windowStart;
+			(i<(windowStart+windowSize)) && (i<totalNumPackets);
+			i++){
+			if(ackMap.find(i)== ackMap.end()){
+				//send(encode(dataMap[nextPacketToSend]));
+				printf("Send Message #%d\n", i);
+				sendMessage((const char*) dataMap[i]->buffer,dataMap[i]->size);
 			}
 		}
-		ackMap.erase(windowStart);
-		dataMap.erase(windowStart);
-		if(nextPacketToRead<totalNumPackets){
-			addNextPacketToDataMap(nextPacketToRead);
+		printf("  ackMap.find(windowStart)!= ackMap.end():%d\n",(ackMap.find(windowStart)!= ackMap.end()));
+		printf("  WindowStart:%d\n", windowStart);
+
+		nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
+
+		while(ackMap.find(windowStart)!= ackMap.end() &&
+			  (windowStart<totalNumPackets)  ){
+			
+			if(nextPacketToRead<totalNumPackets){
+				addNextPacketToDataMap(nextPacketToRead);
+			}
+			printf("windowStart:%d\n", windowStart);
+			printf("nextPacketToRead:%d\n",nextPacketToRead);
+			printf("ackMap.find(windowStart)!= ackMap.end():%d\n",(ackMap.find(windowStart)!= ackMap.end()));
+			ackMap.erase(windowStart);
+			dataMap.erase(windowStart);
+			windowStart++;
+			nextPacketToRead++;
 		}
-		
-		printf("windowStart:%d\n", windowStart);
-		printf("nextPacketToRead:%d\n",nextPacketToRead);
-		windowStart++;
-		nextPacketToRead++;
 	}
-	/*while(!finishedReading){
-		//make a buffer of .05 MB to send
-		char *sendBuffer = (char*) malloc(50000); 
-		// Read the Next packet and put it in sendbuffer
-		readSize=readNextPacket(sendBuffer);
-		//addInfoToMap(sendBuffer, readSize, seqNum, dataMap);
-		char *formattedBuffer=new char[readSize+8];
-		
-
-		makeBuffer(DATA,seqNum,sendBuffer,readSize,formattedBuffer);
-
-		addInfoToDataMap(seqNum,formattedBuffer,readSize+8);
-		displayMap(dataMap,"DataMapContents");
-		//Send the contents of send buffer to the reciever
-		sendMessage((const char*) dataMap[seqNum]->buffer,dataMap[seqNum]->size);
-		seqNum++;
-
-		//free the memory
-		free(sendBuffer);
-	}
-	char *endBuffer= new char[8];
-	makeBuffer(FILE_END,seqNum,new char[0],0,endBuffer);
-	addInfoToDataMap(seqNum,endBuffer,8);
-	free(endBuffer);*/
-
-
 	
 	
-	
+	printf("SendThreadEnd\n");
 }
 
 //Helper functions
@@ -291,8 +280,8 @@ void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, int payloa
 	//ePacketType type=DATA;
 	memcpy(&result[0],&type,2);
 	memcpy(&result[2],&seqNum,4);
-	printf("() makeBuffer_Payload:%.20s\n",payload);
-	printf("() makeBuffer_seqNum:%d\n",seqNum);
+	//printf("() makeBuffer_Payload:%.20s\n",payload);
+	//printf("() makeBuffer_seqNum:%d\n",seqNum);
 	memcpy(result+8,(const char*)payload,payloadSize);
 
 	unsigned short checksumValue=checksum(result,payloadSize+8);
@@ -353,16 +342,17 @@ void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char*
 	}
 }
 
-
+int recv_seqNum;
 void threadRecv(){
-	int seqNum=0;
+	int recv_seqNum=0;
+	printf("#   Receiving Message\n");
 	while(windowStart<totalNumPackets){
-		printf("### Receiving Message\n");
 		char *recvBuffer = (char*) malloc(50000);
 		recvMessage(recvBuffer,3000);
-		addInfoToAckMap(seqNum,recvBuffer,sizeof(&recvBuffer));
-		displayMap(ackMap,"AckMap");
-		seqNum++;
+		printf("#   Received Message #%d\n", recv_seqNum);
+		addInfoToAckMap(recv_seqNum,recvBuffer,sizeof(&recvBuffer));
+		//displayMap(ackMap,"AckMap");
+		recv_seqNum++;
 
 	}
 }
@@ -448,7 +438,7 @@ void readfile(char *sendBuffer, unsigned int readSize){
 	while(accu<readSize){
 		readResult = fread(sendBuffer+accu,1,readSize,inputFile);
 		accu+=readResult;
-		printf("readResult:%d, accu:%d, readSize:%d\n",readResult, accu,readSize);
+		//printf("readResult:%d, accu:%d, readSize:%d\n",readResult, accu,readSize);
 	}
 	if(readResult!=readSize){
 		printf("ERROR READING FILE\n");
@@ -466,7 +456,7 @@ void sendMessage(const char *my_message, unsigned int messageLength){
 }
 
 void recvMessage(char *my_message, unsigned int messageLength){
-	printf("receiving message from %s\n", ip);
+	//printf("receiving message from %s\n", ip);
 	int slen = sizeof(servaddr);
 	int recvlen = recvfrom(sock, my_message, messageLength, 0, (struct sockaddr *)&servaddr, &slen);
 	if (recvlen< 0) { 
@@ -476,7 +466,7 @@ void recvMessage(char *my_message, unsigned int messageLength){
 	}
 	if (recvlen >= 0) {
         my_message[recvlen] = 0;	/* expect a printable string - terminate it */
-        printf("received message: \"%s\"\n", my_message);
+        //printf("received message: \"%s\"\n", my_message);
     }
 }
 
