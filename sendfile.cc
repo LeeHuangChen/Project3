@@ -196,7 +196,7 @@ void threadSend(){
 		printf("  WindowStart:%d\n", windowStart);
 
 		//nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
-		nanosleep((const struct timespec[]){{0, 500000L}}, NULL);
+		nanosleep((const struct timespec[]){{0, 5000000L}}, NULL);
 
 		while(ackMap.find(windowStart)!= ackMap.end() &&
 			  (windowStart<totalNumPackets)  ){
