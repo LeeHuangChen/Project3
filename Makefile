@@ -5,10 +5,13 @@ LKOPTS =
 OBJS =\
 HEADRES =\
 
-all:	sendfile
+all:	sendfile recvfile
 
 sendfile: sendfile.cc
 	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o sendfile sendfile.cc
+
+recvfile: recvfile.cc
+	$(CC) $(COPTS) -o recvfile recvfile.cc
 
 
 
