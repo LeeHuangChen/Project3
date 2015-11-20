@@ -368,11 +368,14 @@ void threadRecv(){
 		addInfoToAckMap(recv_seqNum,recvBuffer,sizeof(&recvBuffer));
 		unsigned int readSeqNum = (unsigned int) recvBuffer[2];
 		//displayMap(ackMap,"AckMap");
+		printf("#   ReadSeqNum:%d\n", readSeqNum);
+		printf("#   recv_seqNum:%d\n", recv_seqNum);
 		if(readSeqNum==recv_seqNum){
 			recv_seqNum++;
 		}
 		else if((char)recvBuffer[0]=='a'){
 			recv_seqNum++;//for debugging 
+			printf("#   Test Ack Recieved.\n");
 		}
 		printf("#   WindowStart:%d\n", windowStart);
 		//printf("windowStart<totalNumPackets-1:%d \n",(windowStart<totalNumPackets));
