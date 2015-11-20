@@ -24,6 +24,7 @@
 struct packet{
 	char* buffer;
 	unsigned int size;
+	unsigned int start;
 };
 typedef struct packet PACKET;
 enum ePacketType{
@@ -121,6 +122,7 @@ int readingPositionInTheInputFile=0;
 int bytesLeftToRead;
 bool finishedReading=false;
 bool finishedReceiving=false;
+unsigned int readLocationInFile=0;
 
 //window management
 unsigned int windowStart=0;
@@ -133,7 +135,7 @@ unsigned int windowSize = 5;
 //Helper functions for this section:
 int getPacketSize();
 int readNextPacket(char *buffer);
-void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size);
+void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size, unsigned int start);
 void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size);
 void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
 void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, int payloadSize, char *result);
@@ -143,6 +145,7 @@ void addNextPacketToDataMap(unsigned int index);
 
 //Code for this section:
 void threadSend(){
+	/*
 	//open the input file
 	inputFile = fopen(filename,"r");
 	if(inputFile==NULL){
@@ -156,7 +159,7 @@ void threadSend(){
 	//+2 for the filename and file_end packet
 	totalNumPackets=(filesize+(packetSize-1))/packetSize+2;
 	printf("&&& totalNumPackets:%d\n",totalNumPackets);
-	
+	*/
 	//local variables for this function
 	unsigned int seqNum=1;
 	int readSize=0;
@@ -179,7 +182,13 @@ void threadSend(){
 			i++){
 			if(ackMap.find(i)== ackMap.end()){
 				//send(encode(dataMap[nextPacketToSend]));
-				printf("Send Message #%d\n", i);
+				if(i==0){
+					printf("Send Message #%d  i.e. [send data] %d (%d)\n", i,0,0);
+				}
+				else{
+					printf("Send Message #%d  i.e. [send data] %d (%d)\n", i,dataMap[i]->start,dataMap[i]->size-8);
+				}
+				
 				sendMessage((const char*) dataMap[i]->buffer,dataMap[i]->size);
 			}
 		}
@@ -219,7 +228,7 @@ void addNextPacketToDataMap(unsigned int index){
 		printf("filenameBufferLen:%d\n",strlen(filename)+8);
 		printf("filename:%s\n", filename);
 		makeBuffer(FILENAME,index,filename,strlen(filename),filenameBuffer);
-		addInfoToDataMap(index,filenameBuffer,strlen(filename)+8);
+		addInfoToDataMap(index,filenameBuffer,strlen(filename)+8, 0);
 		//free(filenameBuffer);
 		//displayMap(dataMap,"DataMapContents");
 	}
@@ -227,7 +236,7 @@ void addNextPacketToDataMap(unsigned int index){
 		printf("* add file end\n");
 		char *endBuffer= new char[8];
 		makeBuffer(FILE_END,index,new char[0],0,endBuffer);
-		addInfoToDataMap(index,endBuffer,8);
+		addInfoToDataMap(index,endBuffer,8,readLocationInFile);
 		//free(endBuffer);
 	}
 	else if(index>=totalNumPackets){
@@ -237,10 +246,12 @@ void addNextPacketToDataMap(unsigned int index){
 		printf("* add Data\n");
 		char *sendBuffer = (char*) malloc(50000); 
 		// Read the Next packet and put it in sendbuffer
+		unsigned int startIndex=readLocationInFile;
+
 		int readSize=readNextPacket(sendBuffer);
 		char *formattedBuffer=new char[readSize+8];
 		makeBuffer(DATA,index,sendBuffer,readSize,formattedBuffer);
-		addInfoToDataMap(index,formattedBuffer,readSize+8);
+		addInfoToDataMap(index,formattedBuffer,readSize+8,startIndex);
 		free(sendBuffer);
 	}
 }
@@ -248,6 +259,8 @@ int readNextPacket(char *buffer){
 	int readSize=getPacketSize();
 	//Read the input file for 'readSize' amount of data and store it in buffer
 	readfile(buffer,readSize);
+	readLocationInFile+=readSize;
+	printf("==============readLocationInFile:%d\n",readLocationInFile);
 	return readSize;
 }
 int getPacketSize(){
@@ -263,10 +276,11 @@ int getPacketSize(){
 	}
 	return readSize;
 }
-void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size){
+void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size, unsigned int start){
 	std::shared_ptr<PACKET> packet (new PACKET());
 	packet->buffer = buffer;
 	packet->size = size;
+	packet->start=start;
 	dataMap.insert(std::make_pair(seqNum, packet));
 }
 
