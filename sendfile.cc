@@ -186,7 +186,8 @@ void threadSend(){
 		printf("  ackMap.find(windowStart)!= ackMap.end():%d\n",(ackMap.find(windowStart)!= ackMap.end()));
 		printf("  WindowStart:%d\n", windowStart);
 
-		nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
+		//nanosleep((const struct timespec[]){{0, 500000000L}}, NULL);
+		nanosleep((const struct timespec[]){{0, 500000L}}, NULL);
 
 		while(ackMap.find(windowStart)!= ackMap.end() &&
 			  (windowStart<totalNumPackets)  ){
@@ -346,15 +347,23 @@ int recv_seqNum;
 void threadRecv(){
 	int recv_seqNum=0;
 	printf("#   Receiving Message\n");
-	while(windowStart<totalNumPackets){
+	while(recv_seqNum<totalNumPackets){
 		char *recvBuffer = (char*) malloc(50000);
 		recvMessage(recvBuffer,3000);
 		printf("#   Received Message #%d\n", recv_seqNum);
 		addInfoToAckMap(recv_seqNum,recvBuffer,sizeof(&recvBuffer));
+		unsigned int readSeqNum = (unsigned int) recvBuffer[2];
 		//displayMap(ackMap,"AckMap");
-		recv_seqNum++;
-
+		if(readSeqNum==recv_seqNum){
+			recv_seqNum++;
+		}
+		else if((char)recvBuffer[0]=='a'){
+			recv_seqNum++;//for debugging 
+		}
+		printf("#   WindowStart:%d\n", windowStart);
+		//printf("windowStart<totalNumPackets-1:%d \n",(windowStart<totalNumPackets));
 	}
+	printf("#   Receive Thread End\n");
 }
  
 ///////////////////////////////////////////////////////																//////////////////
