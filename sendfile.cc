@@ -365,9 +365,9 @@ void threadRecv(){
 		char *recvBuffer = (char*) malloc(50000);
 		recvMessage(recvBuffer,3000);
 		printf("#   Received Message #%d\n", recv_seqNum);
-		addInfoToAckMap(recv_seqNum,recvBuffer,sizeof(&recvBuffer));
-		unsigned int readSeqNum = atoi(recvBuffer); 
 		
+		unsigned int readSeqNum = atoi(recvBuffer); 
+		addInfoToAckMap(readSeqNum,recvBuffer,sizeof(&recvBuffer));
 		//unsigned int readSeqNum = (unsigned int) recvBuffer[2]; 
 		//unsigned int netSeqNum = (unsigned int) recvBuffer[0];
 		//unsigned int readSeqNum = ntohl(netSeqNum); 
@@ -377,13 +377,16 @@ void threadRecv(){
 		//displayMap(ackMap,"AckMap");
 		printf("#   ReadSeqNum:%d\n", readSeqNum);
 		printf("#   recv_seqNum:%d\n", recv_seqNum);
-		if(readSeqNum==recv_seqNum){
+		while(ackMap.find(recv_seqNum) != ackMap.end()){
+			recv_seqNum++;
+		}
+		/*if(readSeqNum==recv_seqNum){
 			recv_seqNum++;
 		}
 		else if((char)recvBuffer[0]=='a'){
 			recv_seqNum++;//for debugging 
 			printf("#   Test Ack Recieved.\n");
-		}
+		}*/
 		printf("#   WindowStart:%d\n", windowStart);
 		//printf("windowStart<totalNumPackets-1:%d \n",(windowStart<totalNumPackets));
 	}
