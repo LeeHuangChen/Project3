@@ -205,8 +205,13 @@ void recvAndAck(){
 				//displayMap(dataMap,"mapOfMessages");
 				
 				printf("size of data map:%d \n",dataMap.size());
-				
-				printf("count of 1 in data map:%d \n",dataMap.count(1));
+				printf("%d\n",dataMap.begin()->first);
+				printf("%d\n",dataMap.begin()->second==NULL);
+				printf("%d\n",dataMap.end()->first);
+				printf("%d\n",dataMap.end()->second==NULL);
+				for(int i = 0;i<50;i++){
+					printf("count of %d in data map:%d \n",i,dataMap.count(i));
+				}
 				printf("added the following message to the map\n");
 				printf("seqNum:%d\n",seqNum);
 				// printf("size:%d\n", dataMap[seqNum]->size);
