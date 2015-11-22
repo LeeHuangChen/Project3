@@ -366,7 +366,14 @@ void threadRecv(){
 		recvMessage(recvBuffer,3000);
 		printf("#   Received Message #%d\n", recv_seqNum);
 		addInfoToAckMap(recv_seqNum,recvBuffer,sizeof(&recvBuffer));
-		unsigned int readSeqNum = (unsigned int) recvBuffer[2];
+		unsigned int readSeqNum = atoi(recvBuffer); 
+		
+		//unsigned int readSeqNum = (unsigned int) recvBuffer[2]; 
+		//unsigned int netSeqNum = (unsigned int) recvBuffer[0];
+		//unsigned int readSeqNum = ntohl(netSeqNum); 
+		//unsigned int readSeqNum = (unsigned int) hostRecvBuffer; 
+		
+		//unsigned int readSeqNum = memcpy();
 		//displayMap(ackMap,"AckMap");
 		printf("#   ReadSeqNum:%d\n", readSeqNum);
 		printf("#   recv_seqNum:%d\n", recv_seqNum);
