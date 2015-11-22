@@ -181,26 +181,37 @@ void recvAndAck(){
 			else if(type == DATA || type == FILE_END){
 				// add packet to map
 				std::shared_ptr<PACKET> packet (new PACKET());
-				memcpy(&packet->size, &payloadSize,4);
-				memcpy(&packet->type, &type,1);
+				//memcpy(&packet->size, &payloadSize,4);
+				
+				//memcpy(&packet->type, &type,2);
+				packet->size = payloadSize;
+				packet->type = type;
 				//printf("packet->type: %d ,packet->size: %d  \n", packet->type,packet->size);
 				//packet->buffer = (char *)malloc(payloadSize);
 				//memcpy(&packet->buffer, (const char*)&payload, payloadSize);
 				packet->buffer = payload;
 				//printf("packet->type: %d ,packet->size: %d  \n", packet->type,packet->size);
 				//printf("packet->buffer:%s \n",packet->buffer);
-				printf("type: %d, seqNum:%d, payload:%s, payloadSize:%d, checksumInput: %d \n",type,seqNum,payload,payloadSize,checksumInput);
+				//printf("type: %d, seqNum:%d, payload:%s, payloadSize:%d, checksumInput: %d \n",type,seqNum,payload,payloadSize,checksumInput);
 				//printf("packet->size:%d\n",packet->size);
 				
 				//std::shared_ptr<PACKET> newpacket (new PACKET());
 				//dataMap.insert(std::make_pair(55, newpacket));
-				if(dataMap.find(seqNum)->first==NULL)
-					dataMap.insert(std::make_pair(seqNum, packet));
-				//printf("seqNum: %d, packet->type: %d , packet->size: %d  ,packet->buffer: %s  \n", seqNum, packet->type,packet->size,packet->buffer);
+				
+				//if(dataMap.find(seqNum)->second==NULL)
+				printf("seqNum: %d, packet->type: %d , packet->size: %d  ,packet->buffer: %s  \n", seqNum, packet->type,packet->size,packet->buffer);
+				dataMap.insert(std::make_pair(seqNum, packet));
+				//printf("datamap seqnum is null?:%d\n",dataMap[seqNum]==NULL);
+				//displayMap(dataMap,"mapOfMessages");
+				
 				printf("size of data map:%d \n",dataMap.size());
+				
+				printf("count of 1 in data map:%d \n",dataMap.count(1));
 				printf("added the following message to the map\n");
 				printf("seqNum:%d\n",seqNum);
-				
+				// printf("size:%d\n", dataMap[seqNum]->size);
+				// printf("type:%d\n", dataMap[seqNum]->type);
+				// printf("%s\n", dataMap[seqNum]->buffer); 
 				
 				
 				// std::shared_ptr<PACKET> datapacket = dataMap.find(seqNum)->second;
@@ -224,9 +235,9 @@ void recvAndAck(){
 		
 			//send back ack packet
 			// printf("before make buffer\n");
-			// char* ACKBuf;
+			// //char* ACKBuf;
 			// printf("type: %d, seqNum:%d, payload:%s, payloadSize:%d, checksumInput: %d \n",type,seqNum,payload,payloadSize,checksumInput);
-			// makeBuffer(type, seqNum, payload, payloadSize, ACKBuf);	/////////////////////////////////////////////////////////
+			// //makeBuffer(type, seqNum, payload, payloadSize, ACKBuf);	/////////////////////////////////////////////////////////
 			// printf("after make buffer\n");
 			// if (sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&recv_addr, addrlen) < 0)
 				// perror("sendto");
@@ -238,22 +249,6 @@ void recvAndAck(){
 				perror("sendto");
 			
 			
-			
-			// printf("before make buffer\n");
-			// char* ACKBuf = new char[4];
-			// //unsigned int seqNumNet = htonl(seqNum);
-			// //memcpy(&ACKBuf, &seqNumNet,4);
-			// //printf("type: %d, seqNum:%d, payload:%s, payloadSize:%d, checksumInput: %d \n",type,seqNum,payload,payloadSize,checksumInput);
-			// makeBuffer(ACK, seqNum, new char[0],0, ACKBuf);	/////////////////////////////////////////////////////////
-		// //######################################make buffer block#################################
-		// //######################################make buffer block#################################
-			// //unsigned int readSeqNum = (unsigned int)(ACKBuf[2]);
-			// //memcpy(&readSeqNum,&ACKBuf+2,4);
-			// //printf("#   ReadSeqNum:%d\n", readSeqNum);
-			// printf("after make buffer\n");
-			// if (sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&recv_addr, addrlen) < 0)
-				// perror("sendto");
-	
 			
 		}	
 		
