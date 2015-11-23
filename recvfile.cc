@@ -11,12 +11,14 @@
 #include <iostream>
 #include <fstream>
 
+#include <pthread.h>
 #include <limits>
 #include <map>
 #include <string>
 #include <iterator>
 #include <thread>         // std::thread
 #include <memory>
+
 ////////////////////////																							//////////////////
 //  GLOBAL VARIABLES  //																							//////////////////
 ////////////////////////																							//////////////////
@@ -33,21 +35,21 @@ struct packet{
 };
 typedef struct packet PACKET;
 
-int NumPkts = std::numeric_limits<int>::max();;
+unsigned int NumPkts = std::numeric_limits<int>::max();;
 unsigned int NumPktsWritten = 0;
 unsigned int NextPacketToWriteToFile;
 char* filename = NULL;
 std::ofstream file;
 bool doneReceiving=false;
-std::map<unsigned int, std::shared_ptr<PACKET>> dataMap;
+std::map<unsigned int, PACKET *> dataMap;
 
-void threadRecvAndAck();
+void *threadRecvAndAck(void *arg);
 void recvAndAck();
-void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
+void displayMap(std::map<unsigned int, PACKET *> map, const char* name);
 void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, int payloadSize, char* result);
 unsigned short checksum(char *buf, unsigned short size);
 bool isDropPkt(char *buf, unsigned short size);
-void threadWritefile();
+void *threadWritefile(void *arg);
 void writefile();
 void handle_packet();
 unsigned short get_port(int argc, char** argv);
@@ -62,28 +64,37 @@ int main(int argc, char** argv) {
 
 	recvPort = get_port(argc,argv);  
 	//start the recv and write threads
-	std::thread recv(threadRecvAndAck);
-	std::thread write(threadWritefile);
+	
+	pthread_t *recv = new pthread_t;
+	if (pthread_create(recv, NULL, threadRecvAndAck, NULL) != 0)
+	{
+		perror("Create thread error\n");
+		exit(0);
+	}
+	
+	pthread_t *write = new pthread_t;
+	if (pthread_create(write, NULL, threadWritefile, NULL) != 0)
+	{
+		perror("Create thread error\n");
+		exit(0);
+	}
+	
 	//sync recv and write threads
-	recv.join();
-	write.join();
+	pthread_join(*(pthread_t *)recv,NULL);
+	pthread_join(*(pthread_t *)write,NULL);
 	
 	
 	
-
-  
-  
-  
-  
   return 0;
 }
 
 
 
-void threadRecvAndAck(){
+void *threadRecvAndAck(void *arg){
 	
 	recvAndAck();
-	printf("end receiving###############################\n");
+	//printf("end receiving###############################\n");
+	return 0;
 }
 
 
@@ -92,6 +103,7 @@ void recvAndAck(){
 
 	//########initialization
 	int recvSize;
+	int bytesReceived = 0;
 	// allocate a memory buffer in the heap
 	unsigned int buf_size = 50000;
 	
@@ -111,8 +123,6 @@ void recvAndAck(){
 	srcAddr.sin_family = AF_INET;
 	srcAddr.sin_addr.s_addr = INADDR_ANY;
 	srcAddr.sin_port = htons (recvPort); 
-	printf("port: %d\n",recvPort);
-	printf("htons: %d\n",htons (recvPort));
 	/* bind server socket to the address */
 	if (bind(sock, (struct sockaddr *) &srcAddr, sizeof (srcAddr)) < 0)
 	{
@@ -130,10 +140,8 @@ void recvAndAck(){
 		  perror("failed to allocated buffer");
 		  abort();
 		}
-		printf("in while \n");
 		sockaddr_in recv_addr;
 		socklen_t addrlen = sizeof(recv_addr);
-		printf("NumPktsWritten:%d, NumPkts:%d\n",NumPktsWritten,NumPkts);
 		//finish receiving
 		if(NumPktsWritten+1==NumPkts){
 			break;
@@ -147,32 +155,39 @@ void recvAndAck(){
 		}
 	  
 
-		//printf("  Entry(SeqNum):%d\n", SeqNum);
-		printf("receive size:%d\n", recvSize);
-		// unsigned int seqNumNet = (unsigned int)(buf[2]);
-		// unsigned int seqNumHost = ntohl(seqNumNet);
-		printf("  SeqNumFromPayload:%d\n",(unsigned int)(buf[2]));
-		unsigned short checksumInput = *(unsigned short *)(buf + sizeof(char)* 6);
-		printf("  CheckSumFromPayload:%d\n", (unsigned short)(buf[6]));
-		printf("  BufferFromPayload:%.20s\n", buf+8);
+		// printf("  SeqNumFromPayload:%d\n",(unsigned int)(buf[2]));
+		// unsigned short checksumInput = *(unsigned short *)(buf + sizeof(char)* 6);
+		// printf("  CheckSumFromPayload:%d\n", (unsigned short)(buf[6]));
+		// printf("  BufferFromPayload:%.20s\n", buf+8);
 		
 		
 		//####check completeness and send back ACK
 		//store packet info
-		ePacketType type = (ePacketType)(buf[0]);
-		unsigned int seqNum = (unsigned int)(buf[2]);
+		unsigned short typeNet = *(unsigned short *)(buf);
+		ePacketType type = (ePacketType)ntohs(typeNet);
+		unsigned int seqNumNet = *(unsigned int*)(buf+2);
+		unsigned int seqNum = ntohl(seqNumNet);
 		char *payload = buf+8;
 		unsigned int payloadSize = recvSize-8;
 		//checksum
 		bool drop = isDropPkt(buf, recvSize);
-		printf("is drop packet %d\n", drop );
+		// printf("is drop packet %d\n", drop );
+		
 		
 		if(!drop){
-			printf("type: %d, seqNum:%d, payload:%s, payloadSize:%d, checksumInput: %d \n",type,seqNum,payload,payloadSize,checksumInput);
+			// printf("type: %d, seqNum:%d, payload:%s, payloadSize:%d, checksumInput: %d \n",type,seqNum,payload,payloadSize,checksumInput);
 			if(type == FILENAME){
 				// set file name so that write thread can open the file and then write later
+				char filenameEnd[strlen(".recv")];
+				strcpy(filenameEnd,".recv");
 				filename = payload;
+				strcat(filename,filenameEnd);
 				file.open ((const char*)filename, std::ofstream::out | std::ofstream::app);
+				PACKET *packet = new PACKET();
+				if(dataMap.count(seqNum) == 0)
+					printf("[recv data] %d (%d) (in-order) filename:%s  seq:%d \n", bytesReceived, payloadSize, filename,seqNum);
+				dataMap[seqNum] =  packet;
+				
 				//NumPktsWritten++;
 				// std::ofstream file ((const char*)payload, std::ofstream::out);
 				// file.close();
@@ -180,7 +195,7 @@ void recvAndAck(){
 			}
 			else if(type == DATA || type == FILE_END){
 				// add packet to map
-				std::shared_ptr<PACKET> packet (new PACKET());
+				PACKET *packet = (new PACKET());
 				//memcpy(&packet->size, &payloadSize,4);
 				
 				//memcpy(&packet->type, &type,2);
@@ -198,26 +213,22 @@ void recvAndAck(){
 				//std::shared_ptr<PACKET> newpacket (new PACKET());
 				//dataMap.insert(std::make_pair(55, newpacket));
 				
+				// if(dataMap.count(seqNum) == 0){	//do not have that in datamap
+					printf("[recv data] %d (%d) (in-order)  seq:%d \n", bytesReceived, payloadSize,seqNum);
+					bytesReceived += payloadSize;
+				// }
+				
 				//if(dataMap.find(seqNum)->second==NULL)
-				printf("seqNum: %d, packet->type: %d , packet->size: %d  ,packet->buffer: %s  \n", seqNum, packet->type,packet->size,packet->buffer);
-				dataMap.insert(std::make_pair(seqNum, packet));
+				// printf("seqNum: %d, packet->type: %d , packet->size: %d  ,packet->buffer: %s  \n", seqNum, packet->type,packet->size,packet->buffer);
+				dataMap[seqNum] = packet;
 				//printf("datamap seqnum is null?:%d\n",dataMap[seqNum]==NULL);
 				//displayMap(dataMap,"mapOfMessages");
 				
-				printf("size of data map:%d \n",dataMap.size());
-				printf("%d\n",dataMap.begin()->first);
-				printf("%d\n",dataMap.begin()->second==NULL);
-				printf("%d\n",dataMap.end()->first);
-				printf("%d\n",dataMap.end()->second==NULL);
-				printf("%d\n",dataMap.find(2)->first);
-				printf("%d\n",dataMap.find(2)->second==NULL);
-				printf("%d\n",dataMap.find(3)->first);
-				printf("%d\n",dataMap.find(3)->second==NULL);
-				for(int i = 0;i<50;i++){
-					printf("count of %d in data map:%d \n",i,dataMap.count(i));
-				}
-				printf("added the following message to the map\n");
-				printf("seqNum:%d\n",seqNum);
+				
+				
+				
+				// printf("added the following message to the map\n");
+				// printf("seqNum:%d\n",seqNum);
 				// printf("size:%d\n", dataMap[seqNum]->size);
 				// printf("type:%d\n", dataMap[seqNum]->type);
 				// printf("%s\n", dataMap[seqNum]->buffer); 
@@ -232,6 +243,7 @@ void recvAndAck(){
 				
 				//if get the FILE_END packet, get the last sequence number to aid the receive thread to end.
 				if(type == FILE_END){
+					
 					NumPkts = seqNum;
 				}
 				// displayMap(dataMap,"mapOfMessages");
@@ -253,13 +265,16 @@ void recvAndAck(){
 			
 			char* ACKBuf = new char[buf_size];
 			sprintf(ACKBuf, "%d", seqNum);
-			printf("sending response \"%s\"\n", ACKBuf);
+			printf("sending ACK seq=%s \n", ACKBuf);
 			if (sendto(sock, ACKBuf, strlen(ACKBuf), 0, (struct sockaddr *)&recv_addr, addrlen) < 0)
 				perror("sendto");
 			
 			
 			
-		}	
+		}
+		else{
+			printf("[recv corrupt packet]\n");
+		}
 		
 		//display datamap after each time of receiving a packet
 		// displayMap(dataMap,"mapOfMessages");
@@ -268,8 +283,8 @@ void recvAndAck(){
 }//end recvAndAck
 
 
-void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name){
-    typedef std::map<unsigned int, std::shared_ptr<PACKET>>::iterator it_type;
+void displayMap(std::map<unsigned int, PACKET *> map, const char* name){
+    typedef std::map<unsigned int, PACKET *> ::iterator it_type;
     printf("\n");
     printf("MapName:%s\n", name);
     for(it_type iterator = map.begin(); iterator != map.end(); iterator++) {
@@ -303,8 +318,8 @@ void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, int payloa
     memcpy(result+8,(const char*)payload,payloadSize);
     unsigned short checksumValue=checksum(result,payloadSize+8);
     memcpy(result+6,&checksumValue,2);
-	printf("make buffer: type: %d, seqNum:%d, payload:%s, payloadSize:%d, checksumValue: %d \n",type,seqNum,payload,payloadSize,checksumValue);
-    printf("seqnum in buffer: %d\n",(unsigned int)result[2]);
+	// printf("make buffer: type: %d, seqNum:%d, payload:%s, payloadSize:%d, checksumValue: %d \n",type,seqNum,payload,payloadSize,checksumValue);
+    // printf("seqnum in buffer: %d\n",(unsigned int)result[2]);
 }
 
 unsigned short checksum(char *buffer, unsigned short size)
@@ -324,14 +339,13 @@ unsigned short checksum(char *buffer, unsigned short size)
             sum++;
         }
     }
-	printf("check sum result: %d\n",~(sum & 0xFFFF));
     return ~(sum & 0xFFFF);
 }
 
 bool isDropPkt(char *buffer, unsigned short size)
 {
     unsigned short pkt_checksum = *(unsigned short *)(buffer + sizeof(char)* 6);
-	printf("pkt_checksum:%d\n",pkt_checksum);
+	// printf("pkt_checksum:%d\n",pkt_checksum);
     //unsigned short pkt_checksum = ntohs(*(unsigned short *)(buffer + sizeof(char)* 5));
     *(unsigned short *)(buffer + sizeof(char)* 6)=0;
     if (pkt_checksum != checksum(buffer, size))
@@ -341,8 +355,8 @@ bool isDropPkt(char *buffer, unsigned short size)
 }
 
 
-void threadWritefile(){
-	printf("in thread write\n");
+void *threadWritefile(void *arg){
+	// printf("in thread write\n");
 	//while not done receiving and writing
 	while(!doneReceiving){
 		//if we already get the filename packet, start trying to write
@@ -351,28 +365,37 @@ void threadWritefile(){
 		}
 	}
 	file.close();
-	printf("end writing################################\n");
+	// printf("end writing################################\n");
+	printf("[Completed] \n");
+	return 0;
 }
 
 
 void writefile(){
 	// file.open ((const char*)filename, std::ofstream::out | std::ofstream::app);
 	//go over the datamap in sequence to write packets to file in order.
-	std::shared_ptr<PACKET> nextPacket = dataMap[NextPacketToWriteToFile];
+	
+	PACKET * nextPacket = dataMap[NextPacketToWriteToFile];
 	// printf("next packet is null? %d\n", nextPacket==NULL);
+	if(NextPacketToWriteToFile==0 ){
+		NextPacketToWriteToFile++;
+		return ;
+	}
 	
 	if(nextPacket!=NULL){
-		printf("writing next packet \n");
+		// printf("writing next packet \n");
 		if(nextPacket->type==DATA){
 			//write packet to file
 			file.write (nextPacket->buffer, nextPacket->size);
-			printf("nextPacket->size: %d \n",nextPacket->size);
-			printf("NextPacketToWriteToFile %d",NextPacketToWriteToFile);
+			// printf("nextPacket->size: %d \n",nextPacket->size);
+			// printf("NextPacketToWriteToFile %d",NextPacketToWriteToFile);
+			free(dataMap[NextPacketToWriteToFile]->buffer);
 			dataMap.erase(NextPacketToWriteToFile);
 		}
 		else if(nextPacket->type==FILE_END){
 			//finish writing and receiving
 			doneReceiving=true;
+			free(dataMap[NextPacketToWriteToFile]->buffer);
 			dataMap.erase(NextPacketToWriteToFile);
 		}
 		else{
@@ -380,7 +403,7 @@ void writefile(){
 		}
 		NumPktsWritten++;
 		NextPacketToWriteToFile++;
-		printf("NumPktsWritten:%d, NumPkts:%d  in write thread\n",NumPktsWritten,NumPkts);
+		// printf("NumPktsWritten:%d, NumPkts:%d  in write thread\n",NumPktsWritten,NumPkts);
 	}
 	// file.close();
 }
@@ -402,7 +425,7 @@ unsigned short get_port(int argc, char** argv){
 	  default:
 		abort ();
 	  }  
-	printf("recvPort: %d\n",recvPort);
+	// printf("recvPort: %d\n",recvPort);
 	return recvPort;
 	
 }
