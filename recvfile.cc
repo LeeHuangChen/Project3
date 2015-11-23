@@ -212,10 +212,10 @@ void recvAndAck(){
 				//std::shared_ptr<PACKET> newpacket (new PACKET());
 				//dataMap.insert(std::make_pair(55, newpacket));
 				
-				// if(dataMap.count(seqNum) == 0){	//do not have that in datamap
+				if(dataMap[seqNum]==NULL){	//do not have that in datamap
 					printf("[recv data] %d (%d) (in-order)  seq:%d \n", bytesReceived, payloadSize,seqNum);
 					bytesReceived += payloadSize;
-				// }
+				}
 				
 				//if(dataMap.find(seqNum)->second==NULL)
 				// printf("seqNum: %d, packet->type: %d , packet->size: %d  ,packet->buffer: %s  \n", seqNum, packet->type,packet->size,packet->buffer);
@@ -387,15 +387,15 @@ void writefile(){
 			//write packet to file
 			file.write (nextPacket->buffer, nextPacket->size);
 			// printf("nextPacket->size: %d \n",nextPacket->size);
-			// printf("NextPacketToWriteToFile %d",NextPacketToWriteToFile);
-			free(dataMap[NextPacketToWriteToFile]->buffer);
-			dataMap.erase(NextPacketToWriteToFile);
+			//printf("NextPacketToWriteToFile %d",NextPacketToWriteToFile);
+			free(dataMap[NextPacketToWriteToFile]);
+			//dataMap.erase(NextPacketToWriteToFile);
 		}
 		else if(nextPacket->type==FILE_END){
 			//finish writing and receiving
 			doneReceiving=true;
-			free(dataMap[NextPacketToWriteToFile]->buffer);
-			dataMap.erase(NextPacketToWriteToFile);
+			free(dataMap[NextPacketToWriteToFile]);
+			//dataMap.erase(NextPacketToWriteToFile);
 		}
 		else{
 			//ERROR, INAPPROPRIATE PACKETS ARE STORED IN THE DATA MAP
