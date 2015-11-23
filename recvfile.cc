@@ -16,7 +16,6 @@
 #include <map>
 #include <string>
 #include <iterator>
-#include <thread>         // std::thread
 #include <memory>
 
 ////////////////////////																							//////////////////

@@ -515,7 +515,7 @@ void sendMessage(const char *my_message, unsigned int messageLength){
 
 void recvMessage(char *my_message, unsigned int messageLength){
 	//printf("receiving message from %s\n", ip);
-	int slen = sizeof(servaddr);
+	socklen_t slen = sizeof(servaddr);
 	int recvlen = recvfrom(sock, my_message, messageLength, 0, (struct sockaddr *)&servaddr, &slen);
 	if (recvlen< 0) { 
 		perror("recvfrom failed"); 

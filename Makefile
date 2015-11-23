@@ -1,9 +1,6 @@
-CC = g++
-COPTS = -Wall -Wno-deprecated 
-LKOPTS = 
-
-OBJS =\
-HEADRES =\
+CC      = g++
+LD      = g++
+CFLAGS      = -Wall -g -Wno-deprecated -pthread
 
 all:	sendfile recvfile
 
@@ -11,7 +8,7 @@ sendfile: sendfile.cc
 	$(CC) $(DEFS) $(CFLAGS) $(LIB) -o sendfile sendfile.cc
 
 recvfile: recvfile.cc
-	$(CC) $(COPTS) -o recvfile recvfile.cc
+	$(CC) $(COPTS) $(CFLAGS) $(LIB) -o recvfile recvfile.cc
 
 
 
