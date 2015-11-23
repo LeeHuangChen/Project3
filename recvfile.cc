@@ -209,6 +209,10 @@ void recvAndAck(){
 				printf("%d\n",dataMap.begin()->second==NULL);
 				printf("%d\n",dataMap.end()->first);
 				printf("%d\n",dataMap.end()->second==NULL);
+				printf("%d\n",dataMap.find(2)->first);
+				printf("%d\n",dataMap.find(2)->second==NULL);
+				printf("%d\n",dataMap.find(3)->first);
+				printf("%d\n",dataMap.find(3)->second==NULL);
 				for(int i = 0;i<50;i++){
 					printf("count of %d in data map:%d \n",i,dataMap.count(i));
 				}
