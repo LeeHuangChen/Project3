@@ -107,6 +107,7 @@ int main(int argc, char** argv){
 	//closes the file after the file is sent
 	fclose(inputFile);
 	//terminate the program
+	printf("[completed]\n", );
 	return 0;
 }
  
@@ -293,8 +294,11 @@ void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size){
 void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, int payloadSize, char *result){
 	memset(result,0,sizeof(char)*(payloadSize+8));
 	//ePacketType type=DATA;
-	memcpy(&result[0],&type,2);
-	memcpy(&result[2],&seqNum,4);
+	unsigned short net_type=htons(type);
+	memcpy(&result[0],&net_type,2);
+	unsigned int net_seqNum=htonl(seqNum);
+	memcpy(&result[2],&net_seqNum,4);
+	printf("net_seqNum:%d\n", net_seqNum);
 	//printf("() makeBuffer_Payload:%.20s\n",payload);
 	//printf("() makeBuffer_seqNum:%d\n",seqNum);
 	memcpy(result+8,(const char*)payload,payloadSize);
@@ -364,7 +368,7 @@ void threadRecv(){
 	while(recv_seqNum<totalNumPackets){
 		char *recvBuffer = (char*) malloc(50000);
 		recvMessage(recvBuffer,3000);
-		printf("#   Received Message #%d\n", recv_seqNum);
+		//printf("#   Received Message #%d\n", recv_seqNum);
 		
 		unsigned int readSeqNum = atoi(recvBuffer); 
 		addInfoToAckMap(readSeqNum,recvBuffer,sizeof(&recvBuffer));
@@ -375,8 +379,8 @@ void threadRecv(){
 		
 		//unsigned int readSeqNum = memcpy();
 		//displayMap(ackMap,"AckMap");
-		printf("#   ReadSeqNum:%d\n", readSeqNum);
-		printf("#   recv_seqNum:%d\n", recv_seqNum);
+		//printf("#   ReadSeqNum:%d\n", readSeqNum);
+		//printf("#   recv_seqNum:%d\n", recv_seqNum);
 		while(ackMap.find(recv_seqNum) != ackMap.end()){
 			recv_seqNum++;
 		}
@@ -387,7 +391,7 @@ void threadRecv(){
 			recv_seqNum++;//for debugging 
 			printf("#   Test Ack Recieved.\n");
 		}*/
-		printf("#   WindowStart:%d\n", windowStart);
+		//printf("#   WindowStart:%d\n", windowStart);
 		//printf("windowStart<totalNumPackets-1:%d \n",(windowStart<totalNumPackets));
 	}
 	printf("#   Receive Thread End\n");
