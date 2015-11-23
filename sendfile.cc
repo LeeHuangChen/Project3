@@ -13,8 +13,9 @@
 #include <string>
 #include <iterator>
 #include <iostream>
-#include <thread>         // std::thread
+//#include <thread>         // std::thread
 #include <memory>
+#include <pthread.h>
 
 /*syntax:  ./sendfile -r 127.0.0.1:18000 -f testfile2.txt*/
 
@@ -34,8 +35,8 @@ enum ePacketType{
 	FILE_END
 };
 //Send and Receive
-std::map<unsigned int, std::shared_ptr<PACKET>> dataMap;
-std::map<unsigned int, std::shared_ptr<PACKET>> ackMap;
+std::map<unsigned int, PACKET*> dataMap;
+std::map<unsigned int, PACKET*> ackMap;
 
 //File i/o
 char* filename;
@@ -57,10 +58,10 @@ struct sockaddr_in myaddr;
 /////////////////////////////																						//////////////////
 
 //Sending Data/Filename functions
-void threadSend();
+void *threadSend(void * args);
 
 //Receiving ack functions
-void threadRecv();
+void *threadRecv(void * args);
 
 //Network Connection and Initialization
 void initConnection(int argc, char** argv);
@@ -99,15 +100,30 @@ int main(int argc, char** argv){
 	printf("&&& totalNumPackets:%d\n",totalNumPackets);
 	
 
-	std::thread first (threadSend);
-	std::thread second (threadRecv);
-	first.join();
-	second.join();
+	pthread_t *first = new pthread_t;
+	if (pthread_create(first, NULL, threadSend, NULL) != 0)
+	{
+		perror("Create thread error\n");
+		exit(0);
+	}
+	pthread_t *second = new pthread_t;
+	if (pthread_create(second, NULL, threadRecv, NULL) != 0)
+	{
+		perror("Create thread error\n");
+		exit(0);
+	}
+	//std::thread first (threadSend);
+	//std::thread second (threadRecv);
+	pthread_join(*(pthread_t*)first,NULL);
+	pthread_join(*(pthread_t*)second,NULL);
+
+	//first.join();
+	//second.join();
 
 	//closes the file after the file is sent
 	fclose(inputFile);
 	//terminate the program
-	printf("[completed]\n", );
+	printf("[completed]\n" );
 	return 0;
 }
  
@@ -138,14 +154,14 @@ int getPacketSize();
 int readNextPacket(char *buffer);
 void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size, unsigned int start);
 void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size);
-void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name);
+void displayMap(std::map<unsigned int, PACKET*> map, const char* name);
 void makeBuffer(ePacketType type, unsigned int seqNum, char *payload, int payloadSize, char *result);
 unsigned short checksum(char *buf, unsigned short size);
 bool isDropPkt(char *buf, unsigned short size);
 void addNextPacketToDataMap(unsigned int index);
 
 //Code for this section:
-void threadSend(){
+void *threadSend(void * args){
 	/*
 	//open the input file
 	inputFile = fopen(filename,"r");
@@ -208,6 +224,8 @@ void threadSend(){
 			printf("windowStart:%d\n", windowStart);
 			printf("nextPacketToRead:%d\n",nextPacketToRead);
 			printf("ackMap.find(windowStart)!= ackMap.end():%d\n",(ackMap.find(windowStart)!= ackMap.end()));
+			free(ackMap[windowStart]->buffer);
+			free(dataMap[windowStart]->buffer);
 			ackMap.erase(windowStart);
 			dataMap.erase(windowStart);
 			windowStart++;
@@ -278,7 +296,7 @@ int getPacketSize(){
 	return readSize;
 }
 void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size, unsigned int start){
-	std::shared_ptr<PACKET> packet (new PACKET());
+	PACKET *packet =(new PACKET());
 	packet->buffer = buffer;
 	packet->size = size;
 	packet->start=start;
@@ -286,7 +304,7 @@ void addInfoToDataMap(unsigned int seqNum, char *buffer, unsigned int size, unsi
 }
 
 void addInfoToAckMap(unsigned int seqNum, char *buffer, unsigned int size){
-	std::shared_ptr<PACKET> packet (new PACKET());
+	PACKET *packet= (new PACKET());
 	packet->buffer = buffer;
 	packet->size = size;
 	ackMap.insert(std::make_pair(seqNum, packet));
@@ -338,8 +356,8 @@ bool isDropPkt(char *buf, unsigned short size)
           return 0;
 }
 
-void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char* name){
-	typedef std::map<unsigned int, std::shared_ptr<PACKET>>::iterator it_type;
+void displayMap(std::map<unsigned int, PACKET*> map, const char* name){
+	typedef std::map<unsigned int, PACKET*>::iterator it_type;
 	printf("\n");
 	printf("MapName:%s\n", name);
 	for(it_type iterator = map.begin(); iterator != map.end(); iterator++) {
@@ -362,7 +380,7 @@ void displayMap(std::map<unsigned int, std::shared_ptr<PACKET>> map, const char*
 }
 
 int recv_seqNum;
-void threadRecv(){
+void *threadRecv(void * args){
 	int recv_seqNum=0;
 	printf("#   Receiving Message\n");
 	while(recv_seqNum<totalNumPackets){
